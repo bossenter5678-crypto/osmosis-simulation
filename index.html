@@ -1,0 +1,601 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3D Osmosis Bilayer Cross-Section Simulation</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Three.js & OrbitControls -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+        /* Custom Scrollbars */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #0f172a;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #334155;
+            border-radius: 3px;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col antialiased selection:bg-teal-500 selection:text-white">
+
+    <!-- Top Navigation Header -->
+    <header class="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <div class="p-2 bg-gradient-to-tr from-cyan-500 to-teal-400 rounded-xl text-slate-950">
+                    <i class="fa-solid fa-cubes text-xl"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-lg leading-tight tracking-wide text-white">3D Osmosis Membrane Model</h1>
+                    <p class="text-xs text-slate-400">Phospholipid Bilayer & Selective Transport</p>
+                </div>
+            </div>
+            <div class="flex items-center gap-3">
+                <button onclick="togglePause()" id="btn-pause" class="px-4 py-2 bg-slate-800 hover:bg-slate-700 text-slate-200 text-sm font-medium rounded-xl border border-slate-700 transition flex items-center gap-2">
+                    <i id="pause-icon" class="fa-solid fa-pause text-xs"></i>
+                    <span id="pause-text">Pause</span>
+                </button>
+                <button onclick="resetSimulation()" class="px-4 py-2 bg-teal-500 hover:bg-teal-400 text-slate-950 font-semibold text-sm rounded-xl transition shadow-lg shadow-teal-500/20 flex items-center gap-2">
+                    <i class="fa-solid fa-rotate-right text-xs"></i>
+                    <span>Reset</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Workspace Grid -->
+    <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 grid grid-cols-1 lg:grid-cols-12 gap-6">
+
+        <!-- Left: 3D Membrane Canvas Container -->
+        <section class="lg:col-span-8 flex flex-col gap-4">
+            <div class="relative w-full h-[540px] bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden shadow-2xl flex flex-col">
+                
+                <!-- Overlay Canvas Header -->
+                <div class="absolute top-4 left-4 z-10 flex items-center gap-2 bg-slate-950/80 backdrop-blur-md px-3.5 py-1.5 rounded-full border border-slate-800 text-xs text-slate-300">
+                    <span class="w-2 h-2 rounded-full bg-teal-400 animate-pulse"></span>
+                    <span>Interactive 3D Bilayer Cross-Section</span>
+                </div>
+
+                <!-- Legend Overlay -->
+                <div class="absolute top-4 right-4 z-10 bg-slate-950/80 backdrop-blur-md p-3 rounded-xl border border-slate-800 text-xs flex flex-col gap-2">
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-cyan-400 inline-block"></span>
+                        <span class="text-slate-300">Water ($H_2O$)</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-purple-400 inline-block"></span>
+                        <span class="text-slate-300">Solute Molecule</span>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="w-3 h-3 rounded-full bg-amber-400 inline-block"></span>
+                        <span class="text-slate-300">Phospholipid Head</span>
+                    </div>
+                </div>
+
+                <!-- Compartment Labels Overlay -->
+                <div class="absolute bottom-6 left-6 z-10 bg-slate-900/90 border border-slate-700/60 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300">
+                    Extracellular (Outside)
+                </div>
+                <div class="absolute top-16 left-6 z-10 bg-slate-900/90 border border-slate-700/60 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-300">
+                    Intracellular (Inside)
+                </div>
+
+                <!-- Three.js Canvas Mount Point -->
+                <div id="canvas-container" class="w-full h-full cursor-grab active:cursor-grabbing"></div>
+            </div>
+
+            <!-- Bottom Stats Metrics -->
+            <div class="grid grid-cols-3 gap-4">
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-4">
+                    <div class="p-3 bg-cyan-500/10 border border-cyan-500/20 text-cyan-400 rounded-lg">
+                        <i class="fa-solid fa-water text-xl"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs text-slate-400 font-medium">Net Water Direction</div>
+                        <div id="metric-flow" class="text-base font-bold text-teal-400">Equilibrium</div>
+                    </div>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-4">
+                    <div class="p-3 bg-purple-500/10 border border-purple-500/20 text-purple-400 rounded-lg">
+                        <i class="fa-solid fa-filter text-xl"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs text-slate-400 font-medium">Solute Concentration</div>
+                        <div id="metric-ratio" class="text-base font-bold text-slate-200">1:1 Ratio</div>
+                    </div>
+                </div>
+                <div class="bg-slate-900 border border-slate-800 p-4 rounded-xl flex items-center gap-4">
+                    <div class="p-3 bg-teal-500/10 border border-teal-500/20 text-teal-400 rounded-lg">
+                        <i class="fa-solid fa-bolt text-xl"></i>
+                    </div>
+                    <div>
+                        <div class="text-xs text-slate-400 font-medium">Permeability</div>
+                        <div id="metric-perm" class="text-base font-bold text-slate-200">Medium</div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Right: Dashboard Control Panel -->
+        <section class="lg:col-span-4 flex flex-col gap-6">
+
+            <!-- Real-Time Graph Card -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg">
+                <h2 class="text-sm font-semibold text-slate-300 mb-3 flex items-center gap-2">
+                    <i class="fa-solid fa-chart-line text-teal-400"></i> Net Water Flow Rate Over Time
+                </h2>
+                <div class="h-36 w-full">
+                    <canvas id="chartCanvas"></canvas>
+                </div>
+            </div>
+
+            <!-- Parameters Panel -->
+            <div class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col gap-5">
+                <h2 class="text-sm font-semibold text-slate-300 flex items-center gap-2">
+                    <i class="fa-solid fa-sliders text-teal-400"></i> Environmental Controls
+                </h2>
+
+                <!-- Extracellular Concentration Slider -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-400">Extracellular Solute (Outside)</span>
+                        <span id="ext-conc-val" class="font-bold text-teal-400">5.0 %</span>
+                    </div>
+                    <input type="range" id="ext-conc" min="1" max="10" step="0.5" value="5" class="w-full accent-teal-400 bg-slate-800 h-2 rounded-lg cursor-pointer">
+                </div>
+
+                <!-- Temperature Slider -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-400">System Temperature</span>
+                        <span id="temp-val" class="font-bold text-teal-400">25 °C</span>
+                    </div>
+                    <input type="range" id="temp-slider" min="5" max="50" step="1" value="25" class="w-full accent-teal-400 bg-slate-800 h-2 rounded-lg cursor-pointer">
+                </div>
+
+                <!-- Membrane Permeability Slider -->
+                <div class="space-y-2">
+                    <div class="flex justify-between text-xs">
+                        <span class="text-slate-400">Membrane Permeability</span>
+                        <span id="perm-val" class="font-bold text-teal-400">Medium</span>
+                    </div>
+                    <input type="range" id="perm-slider" min="1" max="5" step="1" value="3" class="w-full accent-teal-400 bg-slate-800 h-2 rounded-lg cursor-pointer">
+                </div>
+            </div>
+
+            <!-- Status Display Card -->
+            <div id="state-card" class="bg-slate-900 border border-slate-800 rounded-2xl p-5 shadow-lg flex flex-col gap-2">
+                <div class="flex justify-between items-center">
+                    <span id="solution-state" class="text-lg font-bold text-teal-400">Isotonic Environment</span>
+                    <span id="state-badge" class="px-2.5 py-1 rounded-full text-xs font-semibold bg-teal-500/20 text-teal-300 border border-teal-500/40">Equilibrium</span>
+                </div>
+                <p id="state-desc" class="text-xs text-slate-400 leading-relaxed mt-1">
+                    Solute concentration is equal on both sides of the membrane. Water molecules cross the bilayer at equal rates in both directions.
+                </p>
+            </div>
+        </section>
+    </main>
+
+    <!-- Three.js Script -->
+    <script>
+        // DOM Elements
+        const container = document.getElementById('canvas-container');
+        const extConcSlider = document.getElementById('ext-conc');
+        const extConcVal = document.getElementById('ext-conc-val');
+        const tempSlider = document.getElementById('temp-slider');
+        const tempVal = document.getElementById('temp-val');
+        const permSlider = document.getElementById('perm-slider');
+        const permVal = document.getElementById('perm-val');
+        
+        const metricFlowEl = document.getElementById('metric-flow');
+        const metricRatioEl = document.getElementById('metric-ratio');
+        const metricPermEl = document.getElementById('metric-perm');
+        
+        const solutionStateEl = document.getElementById('solution-state');
+        const stateBadgeEl = document.getElementById('state-badge');
+        const stateDescEl = document.getElementById('state-desc');
+
+        // Simulation Variables
+        let extSoluteConc = 5.0; // Outside concentration %
+        let intSoluteConc = 5.0; // Inside concentration %
+        let temperature = 25;
+        let permeability = 3;
+        let isPaused = false;
+
+        // Three.js Scene Setup
+        const scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x0f172a); // Slate-900
+
+        const camera = new THREE.PerspectiveCamera(45, container.clientWidth / container.clientHeight, 0.1, 100);
+        camera.position.set(0, 2, 12);
+
+        const renderer = new THREE.WebGLRenderer({ antialias: true });
+        renderer.setSize(container.clientWidth, container.clientHeight);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+        container.appendChild(renderer.domElement);
+
+        const controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.maxDistance = 20;
+        controls.minDistance = 5;
+
+        // Lights
+        const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+        scene.add(ambientLight);
+
+        const dirLight1 = new THREE.DirectionalLight(0xffffff, 0.8);
+        dirLight1.position.set(5, 10, 7);
+        scene.add(dirLight1);
+
+        const dirLight2 = new THREE.DirectionalLight(0x38bdf8, 0.4);
+        dirLight2.position.set(-5, -5, -5);
+        scene.add(dirLight2);
+
+        // --- Build Phospholipid Bilayer Cross-Section ---
+        const bilayerGroup = new THREE.Group();
+        scene.add(bilayerGroup);
+
+        // Phospholipid Head & Tail Geometries
+        const headGeo = new THREE.SphereGeometry(0.24, 16, 16);
+        const tailGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.6, 8);
+
+        const headMat = new THREE.MeshPhongMaterial({
+            color: 0xf59e0b,
+            emissive: 0xd97706,
+            emissiveIntensity: 0.2,
+            shininess: 30,
+            transparent: true,
+            opacity: 0.9
+        });
+
+        const tailMat = new THREE.MeshPhongMaterial({
+            color: 0x94a3b8,
+            transparent: true,
+            opacity: 0.7
+        });
+
+        const GRID_X = 14;
+        const GRID_Z = 6;
+        const SPACING = 0.55;
+        const MEMBRANE_Y = 0; // Center Y-level of membrane
+
+        // Create Bilayer Spheres and Hydrophobic Tails
+        function buildBilayer() {
+            const startX = -((GRID_X - 1) * SPACING) / 2;
+            const startZ = -((GRID_Z - 1) * SPACING) / 2;
+
+            for (let x = 0; x < GRID_X; x++) {
+                for (let z = 0; z < GRID_Z; z++) {
+                    const posX = startX + x * SPACING;
+                    const posZ = startZ + z * SPACING;
+
+                    // Top Leaflet (Facing Intracellular - Up)
+                    const topHead = new THREE.Mesh(headGeo, headMat);
+                    topHead.position.set(posX, MEMBRANE_Y + 0.6, posZ);
+                    bilayerGroup.add(topHead);
+
+                    const topTail1 = new THREE.Mesh(tailGeo, tailMat);
+                    topTail1.position.set(posX - 0.08, MEMBRANE_Y + 0.25, posZ);
+                    bilayerGroup.add(topTail1);
+
+                    const topTail2 = new THREE.Mesh(tailGeo, tailMat);
+                    topTail2.position.set(posX + 0.08, MEMBRANE_Y + 0.25, posZ);
+                    bilayerGroup.add(topTail2);
+
+                    // Bottom Leaflet (Facing Extracellular - Down)
+                    const botHead = new THREE.Mesh(headGeo, headMat);
+                    botHead.position.set(posX, MEMBRANE_Y - 0.6, posZ);
+                    bilayerGroup.add(botHead);
+
+                    const botTail1 = new THREE.Mesh(tailGeo, tailMat);
+                    botTail1.position.set(posX - 0.08, MEMBRANE_Y - 0.25, posZ);
+                    bilayerGroup.add(botTail1);
+
+                    const botTail2 = new THREE.Mesh(tailGeo, tailMat);
+                    botTail2.position.set(posX + 0.08, MEMBRANE_Y - 0.25, posZ);
+                    bilayerGroup.add(botTail2);
+                }
+            }
+        }
+        buildBilayer();
+
+        // --- Particle Setup ---
+        const particles = [];
+        const WATER_COUNT = 70;
+        
+        const waterGeo = new THREE.SphereGeometry(0.12, 12, 12);
+        const soluteGeo = new THREE.SphereGeometry(0.3, 16, 16);
+
+        const waterMat = new THREE.MeshPhongMaterial({
+            color: 0x22d3ee,
+            transparent: true,
+            opacity: 0.85,
+            emissive: 0x0891b2,
+            emissiveIntensity: 0.3
+        });
+
+        const soluteMat = new THREE.MeshPhongMaterial({
+            color: 0xc084fc,
+            transparent: true,
+            opacity: 0.95,
+            emissive: 0x7e22ce,
+            emissiveIntensity: 0.4
+        });
+
+        function createParticle(type, isTopSide) {
+            const mesh = new THREE.Mesh(type === 'water' ? waterGeo : soluteGeo, type === 'water' ? waterMat : soluteMat);
+            
+            const x = (Math.random() - 0.5) * 7.0;
+            const z = (Math.random() - 0.5) * 3.0;
+            const y = isTopSide 
+                ? (MEMBRANE_Y + 0.9 + Math.random() * 3.0)  // Top (Inside)
+                : (MEMBRANE_Y - 0.9 - Math.random() * 3.0); // Bottom (Outside)
+
+            mesh.position.set(x, y, z);
+            scene.add(mesh);
+
+            particles.push({
+                mesh: mesh,
+                type: type,
+                velocity: new THREE.Vector3(
+                    (Math.random() - 0.5) * 0.03,
+                    (Math.random() - 0.5) * 0.03,
+                    (Math.random() - 0.5) * 0.03
+                )
+            });
+        }
+
+        function initParticles() {
+            // Remove existing particles
+            particles.forEach(p => scene.remove(p.mesh));
+            particles.length = 0;
+
+            // Water particles (split evenly top/bottom)
+            for (let i = 0; i < WATER_COUNT / 2; i++) {
+                createParticle('water', true);
+                createParticle('water', false);
+            }
+            updateSolutes();
+        }
+
+        function updateSolutes() {
+            // Clear existing solutes
+            for (let i = particles.length - 1; i >= 0; i--) {
+                if (particles[i].type === 'solute') {
+                    scene.remove(particles[i].mesh);
+                    particles.splice(i, 1);
+                }
+            }
+
+            // Inside (Top) Solutes
+            const intSolutes = Math.round(intSoluteConc * 2);
+            for (let i = 0; i < intSolutes; i++) {
+                createParticle('solute', true);
+            }
+
+            // Outside (Bottom) Solutes
+            const extSolutes = Math.round(extSoluteConc * 2);
+            for (let i = 0; i < extSolutes; i++) {
+                createParticle('solute', false);
+            }
+        }
+
+        // Real-Time Chart Setup (Chart.js)
+        const ctx = document.getElementById('chartCanvas').getContext('2d');
+        const chartData = {
+            labels: [],
+            datasets: [{
+                label: 'Net Water Flow (Top / Intracellular)',
+                data: [],
+                borderColor: '#22d3ee',
+                backgroundColor: 'rgba(34, 211, 238, 0.15)',
+                borderWidth: 2,
+                fill: true,
+                tension: 0.3,
+                pointRadius: 0
+            }]
+        };
+
+        const flowChart = new Chart(ctx, {
+            type: 'line',
+            data: chartData,
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                animation: false,
+                scales: {
+                    x: {
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        ticks: { color: '#94a3b8', font: { size: 10 } }
+                    },
+                    y: {
+                        min: -5,
+                        max: 5,
+                        grid: { color: 'rgba(255, 255, 255, 0.05)' },
+                        ticks: { color: '#94a3b8', font: { size: 10 } }
+                    }
+                },
+                plugins: {
+                    legend: { display: false }
+                }
+            }
+        });
+
+        let timeStep = 0;
+        function updateChart(netFlow) {
+            if (chartData.labels.length > 30) {
+                chartData.labels.shift();
+                chartData.datasets[0].data.shift();
+            }
+            chartData.labels.push(timeStep + 's');
+            chartData.datasets[0].data.push(netFlow);
+            timeStep += 0.5;
+            flowChart.update();
+        }
+
+        // Controls Logic
+        extConcSlider.addEventListener('input', (e) => {
+            extSoluteConc = parseFloat(e.target.value);
+            extConcVal.textContent = extSoluteConc.toFixed(1) + ' %';
+            metricRatioEl.textContent = `${intSoluteConc.toFixed(1)} : ${extSoluteConc.toFixed(1)}`;
+            updateSolutes();
+            updateStateInfo();
+        });
+
+        tempSlider.addEventListener('input', (e) => {
+            temperature = parseInt(e.target.value);
+            tempVal.textContent = temperature + ' °C';
+        });
+
+        permSlider.addEventListener('input', (e) => {
+            permeability = parseInt(e.target.value);
+            const permLabels = ['Very Low', 'Low', 'Medium', 'High', 'Very High'];
+            permVal.textContent = permLabels[permeability - 1];
+            metricPermEl.textContent = permLabels[permeability - 1];
+        });
+
+        function togglePause() {
+            isPaused = !isPaused;
+            document.getElementById('pause-icon').className = isPaused ? "fa-solid fa-play text-xs" : "fa-solid fa-pause text-xs";
+            document.getElementById('pause-text').textContent = isPaused ? "Resume" : "Pause";
+        }
+
+        function resetSimulation() {
+            chartData.labels = [];
+            chartData.datasets[0].data = [];
+            timeStep = 0;
+            flowChart.update();
+            initParticles();
+            updateStateInfo();
+        }
+
+        function updateStateInfo() {
+            if (extSoluteConc < intSoluteConc - 0.5) {
+                solutionStateEl.textContent = "Hypotonic Outside";
+                solutionStateEl.className = "text-lg font-bold text-cyan-400";
+                stateBadgeEl.textContent = "Net Inflow ↑";
+                stateBadgeEl.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-cyan-500/20 text-cyan-300 border border-cyan-500/40";
+                stateDescEl.textContent = "Lower solute concentration outside. Water molecules cross the bilayer upwards into the cell via osmosis.";
+            } else if (extSoluteConc > intSoluteConc + 0.5) {
+                solutionStateEl.textContent = "Hypertonic Outside";
+                solutionStateEl.className = "text-lg font-bold text-purple-400";
+                stateBadgeEl.textContent = "Net Outflow ↓";
+                stateBadgeEl.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-purple-500/20 text-purple-300 border border-purple-500/40";
+                stateDescEl.textContent = "Higher solute concentration outside. Water molecules pass downward across the membrane out of the cell.";
+            } else {
+                solutionStateEl.textContent = "Isotonic Environment";
+                solutionStateEl.className = "text-lg font-bold text-teal-400";
+                stateBadgeEl.textContent = "Equilibrium";
+                stateBadgeEl.className = "px-2.5 py-1 rounded-full text-xs font-semibold bg-teal-500/20 text-teal-300 border border-teal-500/40";
+                stateDescEl.textContent = "Solute concentration is equal on both sides of the membrane. Water molecules cross the bilayer at equal rates in both directions.";
+            }
+        }
+
+        // Physics & Animation Loop
+        let lastChartTime = 0;
+        initParticles();
+
+        function animate(timestamp) {
+            requestAnimationFrame(animate);
+
+            controls.update();
+
+            if (!isPaused) {
+                const concDiff = intSoluteConc - extSoluteConc; // Positive = inflow to cell (upward)
+                const tempFactor = temperature / 25;
+                const permFactor = permeability / 3;
+
+                // Update particle movement
+                particles.forEach(p => {
+                    const speed = tempFactor * 0.02;
+                    
+                    // Add directional osmotic bias for water molecules crossing the membrane
+                    if (p.type === 'water') {
+                        const bias = concDiff * 0.003 * permFactor;
+                        p.velocity.y += bias;
+                    }
+
+                    p.mesh.position.addScaledVector(p.velocity, speed * 2);
+
+                    // Boundaries & Rebounds
+                    // Solute Particles: Blocked by phospholipid membrane (y = -0.7 to 0.7)
+                    if (p.type === 'solute') {
+                        if (p.mesh.position.y > 0 && p.mesh.position.y < 0.9) {
+                            p.velocity.y *= -1;
+                            p.mesh.position.y = 0.9;
+                        } else if (p.mesh.position.y < 0 && p.mesh.position.y > -0.9) {
+                            p.velocity.y *= -1;
+                            p.mesh.position.y = -0.9;
+                        }
+                    } else {
+                        // Water Particles: Can pass through membrane layer with slight resistance
+                        if (Math.abs(p.mesh.position.y) < 0.6) {
+                            // Apply permeability check
+                            if (Math.random() > (permeability * 0.18)) {
+                                p.velocity.y *= -1;
+                            }
+                        }
+                    }
+
+                    // Outer Box Boundaries
+                    if (Math.abs(p.mesh.position.x) > 3.8) p.velocity.x *= -1;
+                    if (Math.abs(p.mesh.position.z) > 1.8) p.velocity.z *= -1;
+                    if (p.mesh.position.y > 4.2 || p.mesh.position.y < -4.2) p.velocity.y *= -1;
+                });
+
+                // Update Status Metrics
+                if (Math.abs(concDiff) < 0.5) {
+                    metricFlowEl.textContent = "Equilibrium (Dynamic)";
+                    metricFlowEl.className = "text-base font-bold text-teal-400";
+                } else if (concDiff > 0) {
+                    metricFlowEl.textContent = "Net Inflow ↑ (To Inside)";
+                    metricFlowEl.className = "text-base font-bold text-cyan-400";
+                } else {
+                    metricFlowEl.textContent = "Net Outflow ↓ (To Outside)";
+                    metricFlowEl.className = "text-base font-bold text-purple-400";
+                }
+
+                // Update Chart Stream (0.5s intervals)
+                if (timestamp - lastChartTime > 500) {
+                    const netFlowRate = concDiff * permFactor;
+                    updateChart(netFlowRate);
+                    lastChartTime = timestamp;
+                }
+            }
+
+            renderer.render(scene, camera);
+        }
+
+        // Responsive Resizing
+        window.addEventListener('resize', () => {
+            const width = container.clientWidth;
+            const height = container.clientHeight;
+            camera.aspect = width / height;
+            camera.updateProjectionMatrix();
+            renderer.setSize(width, height);
+        });
+
+        // Start animation loop on window load
+        window.onload = function () {
+            animate(0);
+        };
+    </script>
+</body>
+</html>
